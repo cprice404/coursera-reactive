@@ -1,6 +1,7 @@
 package simulations
 
 import common._
+//import simulations.Wire
 
 class Wire {
   private var sigVal = false
@@ -77,7 +78,11 @@ abstract class CircuitSimulator extends Simulator {
   }
 
   def demux(in: Wire, c: List[Wire], out: List[Wire]) {
-    ???
+    if (out.length != math.pow(2, c.length))
+      throw new IllegalArgumentException(s"Demultiplexer: mismatch between number of control wires (${c.length}) and number of output wires (${out.length})")
+    if (c.length == 0) {
+      orGate(in, in, out.head)
+    }
   }
 
 }
