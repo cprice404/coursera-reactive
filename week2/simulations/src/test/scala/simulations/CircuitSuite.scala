@@ -35,4 +35,39 @@ class CircuitSuite extends CircuitSimulator with FunSuite {
   // to complete with tests for orGate, demux, ...
   //
 
+  def orGateTest(label: String, orGateFn: (Wire, Wire, Wire) => Unit) : Unit = {
+    test(label + " example") {
+      val in1, in2, out = new Wire
+      orGateFn(in1, in2, out)
+      in1.setSignal(false)
+      in2.setSignal(false)
+      run
+
+      assert(out.getSignal === false, "or 1")
+
+      in1.setSignal(true)
+      run
+
+      assert(out.getSignal === true, "or 2")
+
+      in2.setSignal(true)
+      run
+
+      assert(out.getSignal === true, "or 3")
+
+      in1.setSignal(false)
+      run
+
+      assert(out.getSignal === true, "or 4")
+
+      in2.setSignal(false)
+      run
+
+      assert(out.getSignal === false, "or 5")
+    }
+  }
+
+  orGateTest("orGate", orGate)
+  orGateTest("orGate2", orGate2)
+
 }
