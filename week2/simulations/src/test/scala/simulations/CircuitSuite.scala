@@ -4,7 +4,6 @@ import org.scalatest.FunSuite
 
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
-//import simulations.Wire
 
 @RunWith(classOf[JUnitRunner])
 class CircuitSuite extends CircuitSimulator with FunSuite {
@@ -93,69 +92,69 @@ class CircuitSuite extends CircuitSimulator with FunSuite {
 
     in.setSignal(false)
     run
-
     checkOutputs(os, List(0), "demux 0-c 1")
 
     in.setSignal(true)
     run
-
     checkOutputs(os, List(1), "demux 0-c 2")
   }
 
 
-//  test("demux 1-c example") {
-//    val in, c1, out0, out1 = new Wire
-//    val os = List(out1, out0)
-//
-//    demux(in, List(c1), os)
-//
-//    in.setSignal(false)
-//    c1.setSignal(false)
-//    run
-//
-//    checkOutputs(os, List(0,0), "demux 1-c 1")
-//
-//    out.setSignal(true)
-//    run
-//
-//    checkOutputs(os, List(1), "demux 0-c 2")
-//  }
+  test("demux 1-c example") {
+    val in, c1, out0, out1 = new Wire
+    val os = List(out1, out0)
 
-//  test("demux 2-c example") {
-//    val in, c1, c2, out0, out1, out2, out3 = new Wire
-//
-//    demux(in, List(c2, c1), List(out3, out2, out1, out0))
-//
-//    in.setSignal(false)
-//    c1.setSignal(false)
-//    c2.setSignal(false)
-//    run
-//
-//    assert(getOutSignals === List(0,0,0,0), "demux 1")
-//
-//    in.setSignal(true)
-//    run
-//
-//    assert(getOutSignals === List(0,0,0,1), "demux 2")
-//
-//    c2.setSignal(true)
-//    run
-//
-//    assert(getOutSignals === List(0,1,0,0), "demux 3")
-//
-//    c1.setSignal(true)
-//    run
-//
-//    assert(getOutSignals === List(1,0,0,0), "demux 4")
-//
-//    c2.setSignal(false)
-//    run
-//
-//    assert(getOutSignals === List(0,0,1,0), "demux 5")
-//
-//    in.setSignal(false)
-//
-//    assert(getOutSignals === List(0,0,0,0), "demux 6")
-//  }
+    demux(in, List(c1), os)
+
+    in.setSignal(false)
+    c1.setSignal(false)
+    run
+    checkOutputs(os, List(0,0), "demux 1-c 1")
+
+    in.setSignal(true)
+    run
+    checkOutputs(os, List(0,1), "demux 1-c 2")
+
+    c1.setSignal(true)
+    run
+    checkOutputs(os, List(1,0), "demux 1-c 3")
+
+    in.setSignal(false)
+    run
+    checkOutputs(os, List(0,0), "demux 1-c 4")
+  }
+
+  test("demux 2-c example") {
+    val in, c1, c2, out0, out1, out2, out3 = new Wire
+    val os = List(out3, out2, out1, out0)
+
+    demux(in, List(c2, c1), List(out3, out2, out1, out0))
+
+    in.setSignal(false)
+    c1.setSignal(false)
+    c2.setSignal(false)
+    run
+    checkOutputs(os, List(0,0,0,0), "demux 2-c 1")
+
+    in.setSignal(true)
+    run
+    checkOutputs(os, List(0,0,0,1), "demux 2-c 2")
+
+    c2.setSignal(true)
+    run
+    checkOutputs(os, List(0,1,0,0), "demux 2-c 3")
+
+    c1.setSignal(true)
+    run
+    checkOutputs(os, List(1,0,0,0), "demux 2-c 4")
+
+    c2.setSignal(false)
+    run
+    checkOutputs(os, List(0,0,1,0), "demux 2-c 5")
+
+    in.setSignal(false)
+    run
+    checkOutputs(os, List(0,0,0,0), "demux 2-c 6")
+  }
 
 }

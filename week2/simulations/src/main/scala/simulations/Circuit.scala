@@ -1,7 +1,7 @@
 package simulations
 
 import common._
-//import simulations.Wire
+import simulations.Wire
 
 class Wire {
   private var sigVal = false
@@ -80,11 +80,47 @@ abstract class CircuitSimulator extends Simulator {
   def demux(in: Wire, c: List[Wire], out: List[Wire]) {
     if (out.length != math.pow(2, c.length))
       throw new IllegalArgumentException(s"Demultiplexer: mismatch between number of control wires (${c.length}) and number of output wires (${out.length})")
+
     if (c.length == 0) {
       orGate(in, in, out.head)
+    } else if (c.length == 1) {
+      val c0 = c(0)
+      val o1 = out(0)
+      val o0 = out(1)
+      val cInv = new Wire
+      andGate(in, c0, o1)
+      inverter(c0, cInv)
+      andGate(in, cInv, o0)
+    } else if (c.length == 2) {
+      val c2 = c(0)
+      val c1 = c(1)
+      val o3 = out(0)
+      val o2 = out(1)
+      val o1 = out(2)
+      val o0 = out(3)
+
+      val c1Inv, c2Inv = new Wire
+      inverter(c2, c2Inv)
+      inverter(c1, c1Inv)
+
+      val o3input = new Wire
+      andGate(c1, c2, o3input)
+      andGate(in, o3input, o3)
+
+      val o2input = new Wire
+      andGate(c2, c1Inv, o2input)
+      andGate(in, o2input, o2)
+
+      val o1input = new Wire
+      andGate(c1, c2Inv, o1input)
+      andGate(in, o1input, o1)
+
+      val o0input = new Wire
+      andGate(c1Inv, c2Inv, o0input)
+      andGate(in, o0input, o0)
+
     }
   }
-
 }
 
 object Circuit extends CircuitSimulator {
