@@ -80,16 +80,17 @@ abstract class CircuitSimulator extends Simulator {
     if (out.length != math.pow(2, c.length))
       throw new IllegalArgumentException(s"Demultiplexer: mismatch between number of control wires (${c.length}) and number of output wires (${out.length})")
 
-    if (c.length == 0) {
-      orGate(in, in, out.head)
-    } else {
-      val cHead = c.head
-      val inAndcHead, cHeadInv, inAndcHeadInv = new Wire
-      andGate(in, cHead, inAndcHead)
-      inverter(cHead, cHeadInv)
-      andGate(in, cHeadInv, inAndcHeadInv)
-      demux(inAndcHead, c.tail, out.take(out.length / 2))
-      demux(inAndcHeadInv, c.tail, out.takeRight(out.length / 2))
+    c match {
+      case Nil => orGate(in, in, out.head)
+      case c0::cs => {
+        val outSplit = out.length / 2
+        val inAndc0, c0Inv, inAndc0Inv = new Wire
+        andGate(in, c0, inAndc0)
+        inverter(c0, c0Inv)
+        andGate(in, c0Inv, inAndc0Inv)
+        demux(inAndc0, cs, out.take(outSplit))
+        demux(inAndc0Inv, cs, out.takeRight(outSplit))
+      }
     }
   }
 }
