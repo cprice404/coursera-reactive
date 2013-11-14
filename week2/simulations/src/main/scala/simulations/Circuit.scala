@@ -91,21 +91,17 @@ abstract class CircuitSimulator extends Simulator {
       andGate(in, c0, o1)
       inverter(c0, cInv)
       andGate(in, cInv, o0)
-    } else if (c.length == 2) {
-      val c2 = c(0)
-      val c1 = c(1)
-      val o3 = out(0)
-      val o2 = out(1)
-      val o1 = out(2)
-      val o0 = out(3)
+//    } else if (c.length == 2) {
+    } else {
+      val cHead = c.head
+      val inAndcHead, cHeadInv, inAndcHeadInv = new Wire
+      andGate(in, cHead, inAndcHead)
+      inverter(cHead, cHeadInv)
+      andGate(in, cHeadInv, inAndcHeadInv)
+      demux(inAndcHead, c.tail, out.take(out.length / 2))
+      demux(inAndcHeadInv, c.tail, out.takeRight(out.length / 2))
 
-      val inAndc2, c2Inv, inAndc2Inv = new Wire
-      andGate(in, c2, inAndc2)
-      inverter(c2, c2Inv)
-      andGate(in, c2Inv, inAndc2Inv)
-
-      demux(inAndc2, List(c1), List(o3, o2))
-      demux(inAndc2Inv, List(c1), List(o1, o0))
+//      demux()
 //      val c2 = c(0)
 //      val c1 = c(1)
 //      val o3 = out(0)
@@ -113,25 +109,39 @@ abstract class CircuitSimulator extends Simulator {
 //      val o1 = out(2)
 //      val o0 = out(3)
 //
-//      val c1Inv, c2Inv = new Wire
+//      val inAndc2, c2Inv, inAndc2Inv = new Wire
+//      andGate(in, c2, inAndc2)
 //      inverter(c2, c2Inv)
-//      inverter(c1, c1Inv)
+//      andGate(in, c2Inv, inAndc2Inv)
 //
-//      val o3input = new Wire
-//      andGate(c1, c2, o3input)
-//      andGate(in, o3input, o3)
-//
-//      val o2input = new Wire
-//      andGate(c2, c1Inv, o2input)
-//      andGate(in, o2input, o2)
-//
-//      val o1input = new Wire
-//      andGate(c1, c2Inv, o1input)
-//      andGate(in, o1input, o1)
-//
-//      val o0input = new Wire
-//      andGate(c1Inv, c2Inv, o0input)
-//      andGate(in, o0input, o0)
+//      demux(inAndc2, List(c1), List(o3, o2))
+//      demux(inAndc2Inv, List(c1), List(o1, o0))
+////      val c2 = c(0)
+////      val c1 = c(1)
+////      val o3 = out(0)
+////      val o2 = out(1)
+////      val o1 = out(2)
+////      val o0 = out(3)
+////
+////      val c1Inv, c2Inv = new Wire
+////      inverter(c2, c2Inv)
+////      inverter(c1, c1Inv)
+////
+////      val o3input = new Wire
+////      andGate(c1, c2, o3input)
+////      andGate(in, o3input, o3)
+////
+////      val o2input = new Wire
+////      andGate(c2, c1Inv, o2input)
+////      andGate(in, o2input, o2)
+////
+////      val o1input = new Wire
+////      andGate(c1, c2Inv, o1input)
+////      andGate(in, o1input, o1)
+////
+////      val o0input = new Wire
+////      andGate(c1Inv, c2Inv, o0input)
+////      andGate(in, o0input, o0)
 
     }
   }
