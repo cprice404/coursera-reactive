@@ -156,5 +156,4 @@ class CircuitSuite extends CircuitSimulator with FunSuite {
     run
     checkOutputs(os, List(0,0,0,0), "demux 2-c 6")
   }
-
 }
