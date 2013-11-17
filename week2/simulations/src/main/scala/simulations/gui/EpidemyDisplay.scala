@@ -68,6 +68,7 @@ object EpidemyDisplay extends EpidemySimulator with App {
     val roomDimension = new Dimension(roomSize + 1, roomSize + 1)
     setPreferredSize(roomDimension)
     var situation: Situation = null
+    def dead = situation.dead min totalCount
     def sick = situation.sick min totalCount
     def healthy = (sick + situation.healthy) min totalCount
     def immune = (healthy + situation.immune) min totalCount
@@ -80,9 +81,10 @@ object EpidemyDisplay extends EpidemySimulator with App {
       graph.drawPolyline(Array(doorWallSize, 0, 0), Array(roomSize, roomSize, doorWallSize + doorSize), 3)
       for (row <- 0 until lineCount; col <- 0 until lineCount) {
         def color(state: Int) = (state / lineCount) > row || ((state / lineCount) == row && (state % lineCount) > col)
-        if (color(sick)) graph.setColor(Color.RED)
+        if (color(dead)) graph.setColor(Color.RED)
+        else if (color(sick)) graph.setColor(Color.YELLOW)
         else if (color(healthy)) graph.setColor(Color.GREEN)
-        else if (color(immune)) graph.setColor(Color.YELLOW)
+        else if (color(immune)) graph.setColor(Color.PINK)
         else graph.setColor(Color.DARK_GRAY)
         graph.drawOval(roomBorderSize + 1 + (col * (personSize + interPersonSize)), roomBorderSize + 1 + (row * (personSize + interPersonSize)), personSize, personSize)
       }
