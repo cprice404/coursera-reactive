@@ -28,6 +28,13 @@ class Simulator {
     }
   }
 
+  def runSteps(numSteps:Int) {
+    0 to numSteps map((i) => {
+      if (!agenda.isEmpty) { next }
+    })
+    println (s"Current time is now ${currentTime}")
+  }
+
   def run {
     println("*** New propagation ***")
     while (!agenda.isEmpty) { next }

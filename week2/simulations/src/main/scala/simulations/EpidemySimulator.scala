@@ -45,6 +45,10 @@ class EpidemySimulator extends Simulator {
     var row: Int = randomBelow(roomRows)
     var col: Int = randomBelow(roomColumns)
 
+    override def toString = {
+      s"P(id:$id|in:$infected|s:$sick|im:$immune|d:$dead|l:($row,$col))"
+    }
+
     def scheduleMove : Unit = {
       afterDelay(randomBelow(5) + 1) { move }
     }
@@ -57,7 +61,7 @@ class EpidemySimulator extends Simulator {
       if (!dead) {
         // TODO: implement actual moving
         if (roomContainsInfectedPeople) {
-          if (random <= transmissibilityRate) {
+          if (!immune & (random <= transmissibilityRate)) {
             infect
           }
         }
@@ -105,4 +109,14 @@ class EpidemySimulator extends Simulator {
     }
 
   }
+
+
+  // Helper / debug methods
+  def numInfected = { persons.count(_.infected) }
+  def numSick = { persons.count(_.sick) }
+  def numDead = { persons.count(_.dead) }
+  def sickRooms = { persons.filter(_.infected).map((p) => List(p.row, p.col)).distinct }
+  def numInSickRooms = { persons.count((p) => sickRooms.contains(List(p.row, p.col))) }
+  def status = { s"infected: ${numInfected}; sick: ${numSick}; dead: ${numDead}; inSickRooms: ${numInSickRooms}"}
+
 }
