@@ -1,6 +1,7 @@
 package simulations
 
 import math.random
+import scala.collection.mutable.ListBuffer
 
 class EpidemySimulator extends Simulator {
 
@@ -45,6 +46,8 @@ class EpidemySimulator extends Simulator {
     var row: Int = randomBelow(roomRows)
     var col: Int = randomBelow(roomColumns)
 
+    val history = new PersonHistory()
+
     override def toString = {
       s"P(id:$id|in:$infected|s:$sick|im:$immune|d:$dead|l:($row,$col))"
     }
@@ -61,7 +64,7 @@ class EpidemySimulator extends Simulator {
       if (!dead) {
         // TODO: implement actual moving
         if (roomContainsInfectedPeople) {
-          if (!immune & (random <= transmissibilityRate)) {
+          if (!immune & !infected & (random <= transmissibilityRate)) {
             infect
           }
         }
@@ -72,6 +75,7 @@ class EpidemySimulator extends Simulator {
     def infect = {
       if (!dead) {
         infected = true
+        history.record('infect)
         afterDelay(infectedToSickDelay) { sicken }
       }
     }
@@ -79,6 +83,7 @@ class EpidemySimulator extends Simulator {
     def sicken = {
       if (!dead) {
         sick = true
+        history.record('sicken)
         afterDelay(sickToMortalityDelay) { maybeDie }
       }
     }
@@ -87,6 +92,7 @@ class EpidemySimulator extends Simulator {
       if (!dead) {
         if (random <= mortalityRate) {
           dead = true
+          history.record('die)
         } else {
           afterDelay(mortalityToImmuneDelay) { immunize }
         }
@@ -97,6 +103,7 @@ class EpidemySimulator extends Simulator {
       if (!dead) {
         immune = true
         sick = false
+        history.record('immunize)
         afterDelay(immuneToHealthyDelay) { heal }
       }
     }
@@ -105,9 +112,28 @@ class EpidemySimulator extends Simulator {
       if (!dead) {
         infected = false
         immune = false
+        history.record('heal)
       }
     }
 
+  }
+
+  class PersonHistory {
+    val history = ListBuffer[PersonAction]()
+
+    def record(action:Symbol) = {
+      history += PersonAction(currentTime, action)
+    }
+
+    override def toString() = {
+      history.mkString("\n")
+    }
+  }
+
+  case class PersonAction(time:Int, action:Symbol) {
+    override def toString = {
+      s"Time: $time ; Action: $action"
+    }
   }
 
 

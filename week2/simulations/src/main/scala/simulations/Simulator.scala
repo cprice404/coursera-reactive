@@ -8,7 +8,7 @@ class Simulator {
   case class WorkItem(time: Int, action: Action)
 
   protected[simulations] var agenda: Agenda = List()
-  protected var currentTime = 0
+  protected[simulations] var currentTime = 0
 
   protected def afterDelay(delay: Int)(action: => Unit) {
     val item = WorkItem(currentTime + delay, () => action)

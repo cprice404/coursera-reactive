@@ -98,4 +98,18 @@ class EpidemySuite extends FunSuite {
 	  }
 	  assert(infectedTimes > 0, "A person should get infected according to the transmissibility rate when he moves into a room with an infectious person")
   }
+
+  test("dead should also be sick and infected") {
+    val es = new EpidemySimulator
+    while (es.currentTime < 500) {
+      es.next
+      val invalidPersons = es.persons.filter(p => p.dead & !(p.sick & p.infected))
+      if (!invalidPersons.isEmpty) invalidPersons.map(p => {
+        println(s"Found invalid person: $p\nHistory:\n${p.history}")
+      })
+      assert(invalidPersons.isEmpty,
+        "A person should be sick and infected when they die, and should remain sick and infected afterwards.\n" +
+        "Invalid persons:\n" + invalidPersons.map((p) => s"$p\n"))
+    }
+  }
 }
