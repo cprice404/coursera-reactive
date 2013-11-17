@@ -12,11 +12,28 @@ class EpidemySimulator extends Simulator {
     val roomColumns: Int = 8
 
     // to complete: additional parameters of simulation
+    val prevalanceRate = 0.01
+    val mortalityRate = 0.25
+    val transmissibilityRate = 0.40
+
+    val infectedToSickDelay = 6
+    val sickToMortalityDelay = 14 - infectedToSickDelay
+    val mortalityToImmuneDelay = 16 - (infectedToSickDelay + sickToMortalityDelay)
+    val immuneToHealthyDelay = 18 - (infectedToSickDelay + sickToMortalityDelay + mortalityToImmuneDelay)
   }
 
   import SimConfig._
 
-  val persons: List[Person] = List() // to complete: construct list of persons
+  val initialNumInfected = prevalanceRate * population
+
+  def createPerson(i:Int) : Person = {
+    val p = new Person(i)
+    p.scheduleMove
+    if (i <= initialNumInfected) p.infect
+    p
+  }
+
+  val persons: List[Person] = (1 to population map createPerson).toList
 
   class Person (val id: Int) {
     var infected = false
@@ -28,8 +45,64 @@ class EpidemySimulator extends Simulator {
     var row: Int = randomBelow(roomRows)
     var col: Int = randomBelow(roomColumns)
 
-    //
-    // to complete with simulation logic
-    //
+    def scheduleMove : Unit = {
+      afterDelay(randomBelow(5) + 1) { move }
+    }
+
+    def roomContainsInfectedPeople = {
+      persons.exists((p) => (p.row == row) & (p.col == col) & (p.infected))
+    }
+
+    def move = {
+      if (!dead) {
+        // TODO: implement actual moving
+        if (roomContainsInfectedPeople) {
+          if (random <= transmissibilityRate) {
+            infect
+          }
+        }
+        scheduleMove
+      }
+    }
+
+    def infect = {
+      if (!dead) {
+        infected = true
+        afterDelay(infectedToSickDelay) { sicken }
+      }
+    }
+
+    def sicken = {
+      if (!dead) {
+        sick = true
+        afterDelay(sickToMortalityDelay) { maybeDie }
+      }
+    }
+
+    def maybeDie = {
+      if (!dead) {
+        if (random <= mortalityRate) {
+          dead = true
+        } else {
+          afterDelay(mortalityToImmuneDelay) { immunize }
+        }
+      }
+    }
+
+    def immunize = {
+      if (!dead) {
+        immune = true
+        sick = false
+        afterDelay(immuneToHealthyDelay) { heal }
+      }
+    }
+
+    def heal = {
+      if (!dead) {
+        infected = false
+        immune = false
+      }
+    }
+
   }
 }
