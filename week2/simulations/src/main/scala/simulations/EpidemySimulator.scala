@@ -96,24 +96,37 @@ class EpidemySimulator extends Simulator {
       neighboringRooms(Coord(row,col)).filter((c) => ! roomContainsSickPeople(c))
     }
 
+
+    def normalMove {
+      val safeNeighborRooms: List[Coord] = findSafeNeighbors
+      if (safeNeighborRooms.isEmpty) history.record('skipmove)
+      else {
+        val c: Coord = safeNeighborRooms(randomBelow(safeNeighborRooms.length))
+        history.recordMove(Coord(row, col), c)
+        row = c.row
+        col = c.col
+      }
+    }
+
     def move = {
       if (!dead) {
-        val safeNeighborRooms: List[Coord] = findSafeNeighbors
-        if (safeNeighborRooms.isEmpty) history.record('skipmove)
-        else {
-          val c:Coord = safeNeighborRooms(randomBelow(safeNeighborRooms.length))
-          history.recordMove(Coord(row, col), c)
-          row = c.row
-          col = c.col
+        val prevLoc = Coord(row, col)
+        normalMove
+        val curLoc = Coord(row, col)
 
-          if (!infected &
-            !immune &
-            random <= transmissibilityRate &
-            roomContainsInfectedPeople(Coord(row, col))) { infect }
+        if (!(prevLoc == curLoc) &
+          !infected &
+          !immune &
+          random <= transmissibilityRate &
+          roomContainsInfectedPeople(Coord(row, col))) {
+          infect
         }
+
         scheduleMove
       }
     }
+
+
 
     def infect = {
       if (!dead) {
