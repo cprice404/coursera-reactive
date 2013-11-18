@@ -113,6 +113,32 @@ class EpidemySuite extends FunSuite {
     }
   }
 
+  test("neighboringRooms") {
+    // TODO: it's obviously stupid that we have to construct an EpidemySimulator
+    // in order to test the neighboringRooms method; should move it somewhere else.
+    val es = new EpidemySimulator
+    val c1 = Coord(1,1)
+    assert(es.neighboringRooms(c1).toSet ==
+      Set(Coord(0,1), Coord(1,0), Coord(2,1), Coord(1,2)),
+    s"Invalid neighboring rooms for $c1: ${es.neighboringRooms(c1)}")
+
+    val maxRow = es.SimConfig.roomRows - 1
+    val maxCol = es.SimConfig.roomColumns - 1
+
+    val c2 = Coord(0,0)
+    assert(es.neighboringRooms(c2).toSet ==
+      Set(Coord(0,1), Coord(1,0), Coord(0, maxCol),
+        Coord(maxRow,0)),
+      s"Invalid neighboring rooms for $c2: ${es.neighboringRooms(c2)}")
+
+    val c3 = Coord(maxRow,maxCol)
+    assert(es.neighboringRooms(c3).toSet ==
+      Set(Coord(maxRow,maxCol - 1), Coord(maxRow,0),
+        Coord(0, maxCol),
+        Coord(maxRow - 1,maxCol)),
+      s"Invalid neighboring rooms for $c3: ${es.neighboringRooms(c3)}")
+  }
+
   test("each alive person should register a move event at least once every five days") {
 
     val es = new EpidemySimulator
@@ -120,7 +146,12 @@ class EpidemySuite extends FunSuite {
     def validateMove(m:EpidemySimulator#PersonAction) = {
       m match {
         case a: EpidemySimulator#PersonMoveAction => {
-          assert(es.neighboringRooms(a.from).contains(a.to),
+          assert(((a.from.row == a.to.row) &
+                    (List(1,es.SimConfig.roomColumns - 1).
+                      contains(math.abs(a.from.col - a.to.col)))) |
+                  ((a.from.col == a.to.col) &
+                    (List(1,es.SimConfig.roomRows - 1).
+                      contains(math.abs(a.from.row - a.to.row)))),
             s"When moving, 'to' room must be neighbor of 'from' room; from: ${a.from}, to: ${a.to}")
         }
         case _ => assert(false, s"Invalid PersonMoveAction: $m")

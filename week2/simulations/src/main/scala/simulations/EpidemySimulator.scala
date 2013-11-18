@@ -37,15 +37,27 @@ class EpidemySimulator extends Simulator {
     p
   }
 
+  def roomContainsPeopleWith(c:Coord, f:(Person) => Boolean) = {
+    persons.exists((p) => (p.row == c.row) & (p.col == c.col) & f(p))
+  }
+
+  def roomContainsSickPeople(c:Coord) = {
+    roomContainsPeopleWith(c, (p:Person) => p.sick)
+  }
 
   def roomContainsInfectedPeople(c:Coord) = {
-    persons.exists((p) => (p.row == c.row) & (p.col == c.col) & (p.infected))
+    roomContainsPeopleWith(c, (p:Person) => p.infected)
   }
 
   def wrapAroundCoord(r:Int, c:Int) : Coord = {
     Coord(
-      if (r > 0) r else roomRows,
-      if (c > 0) c else roomColumns
+      if (r < 0) { roomRows - 1 }
+      else if (r >= roomRows) 0
+      else r,
+
+      if (c < 0) { roomColumns - 1 }
+      else if (c >= roomColumns) 0
+      else c
     )
   }
 
@@ -81,12 +93,11 @@ class EpidemySimulator extends Simulator {
     }
 
     def findSafeNeighbors = {
-      neighboringRooms(Coord(row,col)).filter((c) => ! roomContainsInfectedPeople(c))
+      neighboringRooms(Coord(row,col)).filter((c) => ! roomContainsSickPeople(c))
     }
 
     def move = {
       if (!dead) {
-        // TODO: implement actual moving
         val safeNeighborRooms: List[Coord] = findSafeNeighbors
         if (safeNeighborRooms.isEmpty) history.record('skipmove)
         else {
@@ -94,12 +105,11 @@ class EpidemySimulator extends Simulator {
           history.recordMove(Coord(row, col), c)
           row = c.row
           col = c.col
-        }
 
-        if (roomContainsInfectedPeople(Coord(row, col))) {
-          if (!immune & !infected & (random <= transmissibilityRate)) {
-            infect
-          }
+          if (!infected &
+            !immune &
+            random <= transmissibilityRate &
+            roomContainsInfectedPeople(Coord(row, col))) { infect }
         }
         scheduleMove
       }
@@ -195,6 +205,6 @@ class EpidemySimulator extends Simulator {
   def numDead = { persons.count(_.dead) }
   def sickRooms = { persons.filter(_.infected).map((p) => List(p.row, p.col)).distinct }
   def numInSickRooms = { persons.count((p) => sickRooms.contains(List(p.row, p.col))) }
-  def status = { s"infected: ${numInfected}; sick: ${numSick}; dead: ${numDead}; inSickRooms: ${numInSickRooms}"}
+  def status = { s"infected: ${numInfected}; sick: ${numSick}; dead: ${numDead}; numSickRooms: ${sickRooms.length}; inSickRooms: ${numInSickRooms}"}
 
 }
