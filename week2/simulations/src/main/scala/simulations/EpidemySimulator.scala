@@ -27,6 +27,8 @@ class EpidemySimulator extends Simulator {
 
     var airTransportRate = 0.01
     var airTransportEnabled = false
+
+    var reducedMobilityEnabled = true
   }
 
   import SimConfig._
@@ -92,7 +94,11 @@ class EpidemySimulator extends Simulator {
     def clearHistory = history.clear
 
     def scheduleMove : Unit = {
-      afterDelay(randomBelow(5) + 1) { move }
+      val maxDaysUntilMove = 5 *
+        (if (sick & reducedMobilityEnabled) 4
+         else if (reducedMobilityEnabled) 2
+         else 1)
+      afterDelay(randomBelow(maxDaysUntilMove) + 1) { move }
     }
 
     def findSafeNeighbors = {
