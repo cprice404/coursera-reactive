@@ -4,6 +4,7 @@ import org.scalatest.FunSuite
 
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
+import org.scalatest.prop.Checkers
 
 @RunWith(classOf[JUnitRunner])
 class EpidemySuite extends FunSuite {
@@ -114,21 +115,33 @@ class EpidemySuite extends FunSuite {
   }
 
   test("each alive person should register a move event at least once every five days") {
-    def assertHasMoveInHistory(p:EpidemySimulator#Person) {
-      val hasMove = p.history.exists((a:EpidemySimulator#PersonAction) => {
-        a.action == 'move | a.action == 'skipmove
-      })
-      if (! hasMove) {
-        println(s"Found person without move in history: $p\n${p.history}")
-      }
-      assert(hasMove, s"Found person without move in history! $p")
-    }
 
     val es = new EpidemySimulator
 
+    def numPersonsWithMove = {
+      es.persons.filter(!_.dead).foldLeft(0)((acc : Int, p: EpidemySimulator#Person) => {
+        val skipMoves = p.history.movesOfType('skipmove)
+        val moves = p.history.movesOfType('move)
+
+        val hasMove = skipMoves.length > 0 | moves.length > 0
+        if (! hasMove) {
+          println(s"Found person without move in history: $p\n${p.history}")
+        }
+        assert(hasMove, s"Found person without move in history! $p")
+
+        if (moves.length > 0) acc + 1
+        else acc
+      })
+    }
+
     while(es.agenda.head.time < 6) es.next
 
-    for (p <- es.persons) assertHasMoveInHistory(p)
+    // TODO: this is an arbitrary value and not an ideal way to write a test,
+    // but we just want to make sure that most of the people actually moved
+    val minimumNumPersonsMoved = (es.persons.length * 0.5).toInt
+    assert(numPersonsWithMove > minimumNumPersonsMoved,
+      s"Expected at least $minimumNumPersonsMoved people to move; actual number was $numPersonsWithMove.")
+
 
 
   }

@@ -132,15 +132,13 @@ class EpidemySimulator extends Simulator {
       history += new PersonMoveAction(currentTime, from, to)
     }
 
+    def movesOfType(action:Symbol) : Seq[PersonAction] = {
+      history.filter(_.action == action)
+    }
+
     override def toString() = {
       history.mkString("\n")
     }
-
-    // TODO: should really be able to implement some interface/trait that would
-    // allow me to proxy all collection ops to the history object without
-    // having to do each one explicitly, but was getting all kinds of weird compile
-    // errors with everything I tried.
-    def exists(f: (PersonAction) => Boolean) = history.exists(f)
   }
 
   case class Coord(x:Int, y:Int);
