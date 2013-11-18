@@ -2,7 +2,9 @@ package simulations
 
 import math.random
 import scala.collection.mutable.ListBuffer
-import scala.collection.SeqProxy
+
+
+case class Coord(row:Int, col:Int)
 
 class EpidemySimulator extends Simulator {
 
@@ -35,6 +37,25 @@ class EpidemySimulator extends Simulator {
     p
   }
 
+
+  def roomContainsInfectedPeople(c:Coord) = {
+    persons.exists((p) => (p.row == c.row) & (p.col == c.col) & (p.infected))
+  }
+
+  def wrapAroundCoord(r:Int, c:Int) : Coord = {
+    Coord(
+      if (r > 0) r else roomRows,
+      if (c > 0) c else roomColumns
+    )
+  }
+
+  def neighboringRooms(c:Coord) = {
+    List(wrapAroundCoord(c.row - 1, c.col),
+      wrapAroundCoord(c.row + 1, c.col),
+      wrapAroundCoord(c.row, c.col - 1),
+      wrapAroundCoord(c.row, c.col + 1))
+  }
+
   val persons: List[Person] = (1 to population map createPerson).toList
 
   class Person (val id: Int) {
@@ -53,20 +74,29 @@ class EpidemySimulator extends Simulator {
       s"P(id:$id|in:$infected|s:$sick|im:$immune|d:$dead|l:($row,$col))"
     }
 
+    def clearHistory = history.clear
+
     def scheduleMove : Unit = {
       afterDelay(randomBelow(5) + 1) { move }
     }
 
-    def roomContainsInfectedPeople = {
-      persons.exists((p) => (p.row == row) & (p.col == col) & (p.infected))
+    def findSafeNeighbors = {
+      neighboringRooms(Coord(row,col)).filter((c) => ! roomContainsInfectedPeople(c))
     }
 
     def move = {
       if (!dead) {
         // TODO: implement actual moving
-        history.record('skipmove)
+        val safeNeighborRooms: List[Coord] = findSafeNeighbors
+        if (safeNeighborRooms.isEmpty) history.record('skipmove)
+        else {
+          val c:Coord = safeNeighborRooms(randomBelow(safeNeighborRooms.length))
+          history.recordMove(Coord(row, col), c)
+          row = c.row
+          col = c.col
+        }
 
-        if (roomContainsInfectedPeople) {
+        if (roomContainsInfectedPeople(Coord(row, col))) {
           if (!immune & !infected & (random <= transmissibilityRate)) {
             infect
           }
@@ -124,6 +154,8 @@ class EpidemySimulator extends Simulator {
   class PersonHistory {
     val history = ListBuffer[PersonAction]()
 
+    def clear = history.clear()
+
     def record(action:Symbol) = {
       history += PersonAction(currentTime, action)
     }
@@ -141,9 +173,7 @@ class EpidemySimulator extends Simulator {
     }
   }
 
-  case class Coord(x:Int, y:Int);
-
-  class PersonMoveAction(time:Int, from: Coord, to: Coord) extends PersonAction(time, 'move) {
+  class PersonMoveAction(time:Int, val from: Coord, val to: Coord) extends PersonAction(time, 'move) {
     def unapply() : Option[(Int, Coord, Coord)] = {
       Some((time, from, to))
     }

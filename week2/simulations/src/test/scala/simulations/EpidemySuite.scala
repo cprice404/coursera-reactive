@@ -4,7 +4,6 @@ import org.scalatest.FunSuite
 
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
-import org.scalatest.prop.Checkers
 
 @RunWith(classOf[JUnitRunner])
 class EpidemySuite extends FunSuite {
@@ -118,10 +117,21 @@ class EpidemySuite extends FunSuite {
 
     val es = new EpidemySimulator
 
+    def validateMove(m:EpidemySimulator#PersonAction) = {
+      m match {
+        case a: EpidemySimulator#PersonMoveAction => {
+          assert(es.neighboringRooms(a.from).contains(a.to),
+            s"When moving, 'to' room must be neighbor of 'from' room; from: ${a.from}, to: ${a.to}")
+        }
+        case _ => assert(false, s"Invalid PersonMoveAction: $m")
+      }
+    }
+
     def numPersonsWithMove = {
       es.persons.filter(!_.dead).foldLeft(0)((acc : Int, p: EpidemySimulator#Person) => {
         val skipMoves = p.history.movesOfType('skipmove)
         val moves = p.history.movesOfType('move)
+        for (m <- moves) validateMove(m)
 
         val hasMove = skipMoves.length > 0 | moves.length > 0
         if (! hasMove) {
@@ -139,10 +149,17 @@ class EpidemySuite extends FunSuite {
     // TODO: this is an arbitrary value and not an ideal way to write a test,
     // but we just want to make sure that most of the people actually moved
     val minimumNumPersonsMoved = (es.persons.length * 0.5).toInt
-    assert(numPersonsWithMove > minimumNumPersonsMoved,
-      s"Expected at least $minimumNumPersonsMoved people to move; actual number was $numPersonsWithMove.")
+    var numMoved = numPersonsWithMove
+    assert(numMoved > minimumNumPersonsMoved,
+      s"Expected at least $minimumNumPersonsMoved people to move; actual number was $numMoved.")
 
+    es.persons.map(_.clearHistory)
 
+    while(es.agenda.head.time < 12) es.next
+
+    numMoved = numPersonsWithMove
+    assert(numMoved > minimumNumPersonsMoved,
+      s"Expected at least $minimumNumPersonsMoved people to move; actual number was $numMoved.")
 
   }
 }
