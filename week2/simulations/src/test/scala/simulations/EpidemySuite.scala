@@ -112,4 +112,24 @@ class EpidemySuite extends FunSuite {
         "Invalid persons:\n" + invalidPersons.map((p) => s"$p\n"))
     }
   }
+
+  test("each alive person should register a move event at least once every five days") {
+    def assertHasMoveInHistory(p:EpidemySimulator#Person) {
+      val hasMove = p.history.exists((a:EpidemySimulator#PersonAction) => {
+        a.action == 'move | a.action == 'skipmove
+      })
+      if (! hasMove) {
+        println(s"Found person without move in history: $p\n${p.history}")
+      }
+      assert(hasMove, s"Found person without move in history! $p")
+    }
+
+    val es = new EpidemySimulator
+
+    while(es.agenda.head.time < 6) es.next
+
+    for (p <- es.persons) assertHasMoveInHistory(p)
+
+
+  }
 }

@@ -2,6 +2,7 @@ package simulations
 
 import math.random
 import scala.collection.mutable.ListBuffer
+import scala.collection.SeqProxy
 
 class EpidemySimulator extends Simulator {
 
@@ -63,6 +64,8 @@ class EpidemySimulator extends Simulator {
     def move = {
       if (!dead) {
         // TODO: implement actual moving
+        history.record('skipmove)
+
         if (roomContainsInfectedPeople) {
           if (!immune & !infected & (random <= transmissibilityRate)) {
             infect
@@ -125,8 +128,29 @@ class EpidemySimulator extends Simulator {
       history += PersonAction(currentTime, action)
     }
 
+    def recordMove(from:Coord, to: Coord) = {
+      history += new PersonMoveAction(currentTime, from, to)
+    }
+
     override def toString() = {
       history.mkString("\n")
+    }
+
+    // TODO: should really be able to implement some interface/trait that would
+    // allow me to proxy all collection ops to the history object without
+    // having to do each one explicitly, but was getting all kinds of weird compile
+    // errors with everything I tried.
+    def exists(f: (PersonAction) => Boolean) = history.exists(f)
+  }
+
+  case class Coord(x:Int, y:Int);
+
+  class PersonMoveAction(time:Int, from: Coord, to: Coord) extends PersonAction(time, 'move) {
+    def unapply() : Option[(Int, Coord, Coord)] = {
+      Some((time, from, to))
+    }
+    override def toString = {
+      s"Time: $time ; Action: move ; From: $from ; To: $to"
     }
   }
 
