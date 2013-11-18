@@ -24,6 +24,9 @@ class EpidemySimulator extends Simulator {
     val sickToMortalityDelay = 14 - infectedToSickDelay
     val mortalityToImmuneDelay = 16 - (infectedToSickDelay + sickToMortalityDelay)
     val immuneToHealthyDelay = 18 - (infectedToSickDelay + sickToMortalityDelay + mortalityToImmuneDelay)
+
+    var airTransportRate = 0.01
+    var airTransportEnabled = false
   }
 
   import SimConfig._
@@ -95,7 +98,13 @@ class EpidemySimulator extends Simulator {
     def findSafeNeighbors = {
       neighboringRooms(Coord(row,col)).filter((c) => ! roomContainsSickPeople(c))
     }
-
+    
+    def airMove {
+      val c = Coord(randomBelow(roomRows), randomBelow(roomColumns))
+      history.recordAirMove(Coord(row, col), c)
+      row = c.row
+      col = c.col
+    }
 
     def normalMove {
       val safeNeighborRooms: List[Coord] = findSafeNeighbors
@@ -111,7 +120,10 @@ class EpidemySimulator extends Simulator {
     def move = {
       if (!dead) {
         val prevLoc = Coord(row, col)
-        normalMove
+        
+        if (airTransportEnabled & (random <= airTransportRate)) airMove
+        else normalMove
+        
         val curLoc = Coord(row, col)
 
         if (!(prevLoc == curLoc) &
@@ -183,6 +195,10 @@ class EpidemySimulator extends Simulator {
       history += PersonAction(currentTime, action)
     }
 
+    def recordAirMove(from:Coord, to: Coord) = {
+      history += new PersonAirMoveAction(currentTime, from, to)
+    }
+
     def recordMove(from:Coord, to: Coord) = {
       history += new PersonMoveAction(currentTime, from, to)
     }
@@ -193,6 +209,15 @@ class EpidemySimulator extends Simulator {
 
     override def toString() = {
       history.mkString("\n")
+    }
+  }
+
+  class PersonAirMoveAction(time:Int, val from: Coord, val to: Coord) extends PersonAction(time, 'airmove) {
+    def unapply() : Option[(Int, Coord, Coord)] = {
+      Some((time, from, to))
+    }
+    override def toString = {
+      s"Time: $time ; Action: airmove ; From: $from ; To: $to"
     }
   }
 

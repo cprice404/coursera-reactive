@@ -159,19 +159,25 @@ class EpidemySuite extends FunSuite {
     }
 
     def numPersonsWithMove = {
-      es.persons.filter(!_.dead).foldLeft(0)((acc : Int, p: EpidemySimulator#Person) => {
+      val accMap = Map[Symbol, Int]('move -> 0, 'airmove -> 0)
+      es.persons.filter(!_.dead).foldLeft(accMap)((acc : Map[Symbol, Int], p: EpidemySimulator#Person) => {
         val skipMoves = p.history.movesOfType('skipmove)
+        val airMoves = p.history.movesOfType('airmove)
         val moves = p.history.movesOfType('move)
         for (m <- moves) validateMove(m)
 
-        val hasMove = skipMoves.length > 0 | moves.length > 0
+        val hasMove = skipMoves.length > 0 | airMoves.length > 0 | moves.length > 0
         if (! hasMove) {
           println(s"Found person without move in history: $p\n${p.history}")
         }
         assert(hasMove, s"Found person without move in history! $p")
 
-        if (moves.length > 0) acc + 1
-        else acc
+        val updatedMap =
+          if (moves.length > 0) acc.updated('move, acc('move) + 1)
+          else acc
+
+        if (airMoves.length > 0) updatedMap.updated('airmove, updatedMap('airmove) + 1)
+        else updatedMap
       })
     }
 
@@ -181,16 +187,23 @@ class EpidemySuite extends FunSuite {
     // but we just want to make sure that most of the people actually moved
     val minimumNumPersonsMoved = (es.persons.length * 0.5).toInt
     var numMoved = numPersonsWithMove
-    assert(numMoved > minimumNumPersonsMoved,
-      s"Expected at least $minimumNumPersonsMoved people to move; actual number was $numMoved.")
+    assert(numMoved('move) > minimumNumPersonsMoved,
+      s"Expected at least $minimumNumPersonsMoved people to move; actual number was ${numMoved('move)}.")
+    if (es.SimConfig.airTransportEnabled)
+      assert(numMoved('airmove) >= 1 & numMoved('airmove) <= 15,
+      s"Expected between 1 and 15 people to move by air.")
 
     es.persons.map(_.clearHistory)
 
     while(es.agenda.head.time < 12) es.next
 
     numMoved = numPersonsWithMove
-    assert(numMoved > minimumNumPersonsMoved,
-      s"Expected at least $minimumNumPersonsMoved people to move; actual number was $numMoved.")
+
+    assert(numMoved('move) > minimumNumPersonsMoved,
+      s"Expected at least $minimumNumPersonsMoved people to move; actual number was ${numMoved('move)}.")
+    if (es.SimConfig.airTransportEnabled)
+      assert(numMoved('airmove) >= 1 & numMoved('airmove) <= 15,
+        s"Expected between 1 and 15 people to move by air.")
 
   }
 }
