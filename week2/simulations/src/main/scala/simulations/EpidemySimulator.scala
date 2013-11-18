@@ -25,20 +25,27 @@ class EpidemySimulator extends Simulator {
     val mortalityToImmuneDelay = 16 - (infectedToSickDelay + sickToMortalityDelay)
     val immuneToHealthyDelay = 18 - (infectedToSickDelay + sickToMortalityDelay + mortalityToImmuneDelay)
 
-    var airTransportRate = 0.01
-    var airTransportEnabled = false
+    val airTransportRate = 0.01
+    val airTransportEnabled = false
 
-    var reducedMobilityEnabled = true
+    val reducedMobilityEnabled = false
+
+    val chosenFewRate = 0.05
+    val chosenFewEnabled = false
   }
 
   import SimConfig._
 
   val initialNumInfected = prevalanceRate * population
+  val numChosenFewImmune = chosenFewRate * population
 
   def createPerson(i:Int) : Person = {
     val p = new Person(i)
     p.scheduleMove
     if (i <= initialNumInfected) p.infect
+    else if (chosenFewEnabled &
+      (i <= initialNumInfected + numChosenFewImmune)) p.immune = true
+
     p
   }
 
