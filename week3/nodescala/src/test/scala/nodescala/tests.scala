@@ -75,7 +75,7 @@ class NodeScalaSuite extends FunSuite {
     }
 
     try {
-      Await.result(delay, 500 millis)
+      Await.result(delay, 750 millis)
       assert(false)
     } catch {
       case t: TimeoutException => // ok!
