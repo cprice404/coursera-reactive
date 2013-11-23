@@ -84,6 +84,30 @@ class NodeScalaSuite extends FunSuite {
     Await.result(delay, 500 millis)
   }
 
+  test("now success") {
+    assert(Future.always(42).now == 42)
+  }
+
+  test("now failure") {
+    try {
+      Future.never.now
+      assert(false)
+    } catch {
+      case t: NoSuchElementException => // ok!
+    }
+  }
+
+  test("continueWith") {
+    val cw = Future.always(42).continueWith(_.now + 404)
+    val res = Await.result(cw, 1 second)
+    assert(res == (404 + 42))
+  }
+
+  test("continue") {
+    val c = Future.always(42).continue(_.get + 404)
+    val res = Await.result(c, 1 second)
+    assert(res == (404 + 42))
+  }
 
   test("CancellationTokenSource should allow stopping the computation") {
     val cts = CancellationTokenSource()
