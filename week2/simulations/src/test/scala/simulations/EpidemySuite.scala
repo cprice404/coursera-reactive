@@ -98,4 +98,112 @@ class EpidemySuite extends FunSuite {
 	  }
 	  assert(infectedTimes > 0, "A person should get infected according to the transmissibility rate when he moves into a room with an infectious person")
   }
+
+  test("dead should also be sick and infected") {
+    val es = new EpidemySimulator
+    while (es.currentTime < 500) {
+      es.next
+      val invalidPersons = es.persons.filter(p => p.dead & !(p.sick & p.infected))
+      if (!invalidPersons.isEmpty) invalidPersons.map(p => {
+        println(s"Found invalid person: $p\nHistory:\n${p.history}")
+      })
+      assert(invalidPersons.isEmpty,
+        "A person should be sick and infected when they die, and should remain sick and infected afterwards.\n" +
+        "Invalid persons:\n" + invalidPersons.map((p) => s"$p\n"))
+    }
+  }
+
+  test("neighboringRooms") {
+    // TODO: it's obviously stupid that we have to construct an EpidemySimulator
+    // in order to test the neighboringRooms method; should move it somewhere else.
+    val es = new EpidemySimulator
+    val c1 = Coord(1,1)
+    assert(es.neighboringRooms(c1).toSet ==
+      Set(Coord(0,1), Coord(1,0), Coord(2,1), Coord(1,2)),
+    s"Invalid neighboring rooms for $c1: ${es.neighboringRooms(c1)}")
+
+    val maxRow = es.SimConfig.roomRows - 1
+    val maxCol = es.SimConfig.roomColumns - 1
+
+    val c2 = Coord(0,0)
+    assert(es.neighboringRooms(c2).toSet ==
+      Set(Coord(0,1), Coord(1,0), Coord(0, maxCol),
+        Coord(maxRow,0)),
+      s"Invalid neighboring rooms for $c2: ${es.neighboringRooms(c2)}")
+
+    val c3 = Coord(maxRow,maxCol)
+    assert(es.neighboringRooms(c3).toSet ==
+      Set(Coord(maxRow,maxCol - 1), Coord(maxRow,0),
+        Coord(0, maxCol),
+        Coord(maxRow - 1,maxCol)),
+      s"Invalid neighboring rooms for $c3: ${es.neighboringRooms(c3)}")
+  }
+
+  test("each alive person should register a move event at least once every five days") {
+
+    val es = new EpidemySimulator
+
+    def validateMove(m:EpidemySimulator#PersonAction) = {
+      m match {
+        case a: EpidemySimulator#PersonMoveAction => {
+          assert(((a.from.row == a.to.row) &
+                    (List(1,es.SimConfig.roomColumns - 1).
+                      contains(math.abs(a.from.col - a.to.col)))) |
+                  ((a.from.col == a.to.col) &
+                    (List(1,es.SimConfig.roomRows - 1).
+                      contains(math.abs(a.from.row - a.to.row)))),
+            s"When moving, 'to' room must be neighbor of 'from' room; from: ${a.from}, to: ${a.to}")
+        }
+        case _ => assert(false, s"Invalid PersonMoveAction: $m")
+      }
+    }
+
+    def numPersonsWithMove = {
+      val accMap = Map[Symbol, Int]('move -> 0, 'airmove -> 0)
+      es.persons.filter(!_.dead).foldLeft(accMap)((acc : Map[Symbol, Int], p: EpidemySimulator#Person) => {
+        val skipMoves = p.history.movesOfType('skipmove)
+        val airMoves = p.history.movesOfType('airmove)
+        val moves = p.history.movesOfType('move)
+        for (m <- moves) validateMove(m)
+
+        val hasMove = skipMoves.length > 0 | airMoves.length > 0 | moves.length > 0
+        if (! hasMove) {
+          println(s"Found person without move in history: $p\n${p.history}")
+        }
+        assert(hasMove, s"Found person without move in history! $p")
+
+        val updatedMap =
+          if (moves.length > 0) acc.updated('move, acc('move) + 1)
+          else acc
+
+        if (airMoves.length > 0) updatedMap.updated('airmove, updatedMap('airmove) + 1)
+        else updatedMap
+      })
+    }
+
+    while(es.agenda.head.time < 6) es.next
+
+    // TODO: this is an arbitrary value and not an ideal way to write a test,
+    // but we just want to make sure that most of the people actually moved
+    val minimumNumPersonsMoved = (es.persons.length * 0.5).toInt
+    var numMoved = numPersonsWithMove
+    assert(numMoved('move) > minimumNumPersonsMoved,
+      s"Expected at least $minimumNumPersonsMoved people to move; actual number was ${numMoved('move)}.")
+    if (es.SimConfig.airTransportEnabled)
+      assert(numMoved('airmove) >= 1 & numMoved('airmove) <= 15,
+      s"Expected between 1 and 15 people to move by air.")
+
+    es.persons.map(_.clearHistory)
+
+    while(es.agenda.head.time < 12) es.next
+
+    numMoved = numPersonsWithMove
+
+    assert(numMoved('move) > minimumNumPersonsMoved,
+      s"Expected at least $minimumNumPersonsMoved people to move; actual number was ${numMoved('move)}.")
+    if (es.SimConfig.airTransportEnabled)
+      assert(numMoved('airmove) >= 1 & numMoved('airmove) <= 15,
+        s"Expected between 1 and 15 people to move by air.")
+
+  }
 }
