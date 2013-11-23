@@ -34,6 +34,57 @@ class NodeScalaSuite extends FunSuite {
     }
   }
 
+  test("any success") {
+    val any = Future.any(List(Future.never, Future.never, Future.always(42), Future.never))
+
+    assert(Await.result(any, 100 millis) == 42)
+  }
+
+  test("any multi success") {
+    val any = Future.any(List(Future.never, Future.never, Future.always(42), Future.always(404), Future.never))
+
+    val res = Await.result(any, 100 millis)
+    assert(res == 42 || res == 404)
+  }
+
+  test("any failure") {
+    val any = Future.any(List(Future.never, Future.never, Future { throw new IllegalStateException }, Future.never))
+
+    try {
+      Await.result(any, 100 millis)
+      assert(false)
+    } catch {
+      case e: IllegalStateException => // ok!
+    }
+  }
+
+  test("all") {
+    val all = Future.all(List(Future.always(42), Future.always(6), Future.always(7), Future.always(404)))
+
+    assert(Await.result(all, 100 millis) == List(42, 6, 7, 404))
+  }
+
+  test("delay") {
+    val delay = Future.delay(1 second)
+
+    try {
+      Await.result(delay, 0 nanos)
+      assert(false)
+    } catch {
+      case t: TimeoutException => // ok!
+    }
+
+    try {
+      Await.result(delay, 500 millis)
+      assert(false)
+    } catch {
+      case t: TimeoutException => // ok!
+    }
+
+    Await.result(delay, 500 millis)
+  }
+
+
   test("CancellationTokenSource should allow stopping the computation") {
     val cts = CancellationTokenSource()
     val ct = cts.cancellationToken
