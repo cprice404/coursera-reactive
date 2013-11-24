@@ -13,27 +13,38 @@ object Main {
     // 1. instantiate the server at 8191, relative path "/test",
     //    and have the response return headers of the request
     val myServer = new NodeScala.Default(8191)
-    val myServerSubscription = ???
+    val myServerSubscription = myServer.start("/test")((r) => {
+      r.keys.map((h) => s"$h: ${r(h).mkString(",")}").iterator
+    })
 
     // TO IMPLEMENT
     // 2. create a future that expects some user input `x`
     //    and continues with a `"You entered... " + x` message
-    val userInterrupted: Future[String] = ???
+    val userInterrupted: Future[String] = Future.userInput("Press enter to exit:") continue { x =>
+      s"You entered... $x"
+    }
 
     // TO IMPLEMENT
     // 3. create a future that completes after 20 seconds
     //    and continues with a `"Server timeout!"` message
-    val timeOut: Future[String] = ???
+    val timeOut: Future[String] = Future.delay(20 seconds) continue { _ =>
+      "Server timeout!"
+    }
 
     // TO IMPLEMENT
     // 4. create a future that completes when either 10 seconds elapse
     //    or the user enters some text and presses ENTER
-    val terminationRequested: Future[String] = ???
+    val terminationRequested: Future[String] = Future.any(List(timeOut, userInterrupted))
 
     // TO IMPLEMENT
     // 5. unsubscribe from the server
     terminationRequested onSuccess {
-      case msg => ???
+      case msg => {
+        println(msg)
+        myServerSubscription.unsubscribe()
+        println("Bye")
+
+      }
     }
   }
 
