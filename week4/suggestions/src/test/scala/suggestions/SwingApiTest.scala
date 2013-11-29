@@ -99,9 +99,40 @@ class SwingApiTest extends FunSuite {
 
     textField.text = "F"
     textField.text = "Fo"
-    sub.unsubscribe
+    sub.unsubscribe()
     textField.text = "Foo"
 
     assert(observed == Seq("F", "Fo"), observed)
+  }
+
+  test("SwingApi should emit click events to the observable") {
+    val button = new swingApi.Button
+    val clicks = button.clicks
+
+    var numClicks = 0
+    val sub = clicks subscribe { _ =>
+      numClicks += 1
+    }
+
+    button.click()
+    button.click()
+    button.click()
+    assert(numClicks == 3, numClicks)
+  }
+
+  test("button clicks obvservable should support unsubscribe") {
+    val button = new swingApi.Button
+    val clicks = button.clicks
+
+    var numClicks = 0
+    val sub = clicks subscribe { _ =>
+      numClicks += 1
+    }
+
+    button.click()
+    button.click()
+    sub.unsubscribe()
+    button.click()
+    assert(numClicks == 2, numClicks)
   }
 }
