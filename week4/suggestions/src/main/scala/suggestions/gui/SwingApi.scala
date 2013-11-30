@@ -55,7 +55,7 @@ trait SwingApi {
     def textValues: Observable[String] = Observable(o => {
       val r:Reaction = {
         case ValueChanged(_) => o.onNext(field.text)
-        case other => println(s"TextField event: '$other'")
+        case _ => Unit
       }
       field.subscribe(r)
       Subscription { field.unsubscribe(r) }
@@ -70,7 +70,10 @@ trait SwingApi {
      * @return an observable with a stream of buttons that have been clicked
      */
     def clicks: Observable[Button] = Observable(o => {
-      val r:Reaction = { case ButtonClicked(_) => o.onNext(button) }
+      val r:Reaction = {
+        case ButtonClicked(_) => o.onNext(button)
+        case _ => Unit
+      }
       button.subscribe(r)
       Subscription { button.unsubscribe(r) }
     })
