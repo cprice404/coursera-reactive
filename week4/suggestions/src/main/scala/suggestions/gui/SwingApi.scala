@@ -53,7 +53,10 @@ trait SwingApi {
       * @return an observable with a stream of text field updates
       */
     def textValues: Observable[String] = Observable(o => {
-      val r:Reaction = { case ValueChanged(_) => o.onNext(field.text) }
+      val r:Reaction = {
+        case ValueChanged(_) => o.onNext(field.text)
+        case other => println(s"TextField event: '$other'")
+      }
       field.subscribe(r)
       Subscription { field.unsubscribe(r) }
     })

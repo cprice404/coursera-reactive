@@ -65,11 +65,7 @@ trait WikipediaApi {
      * Note: uses the existing combinators on observables.
      */
     def timedOut(totalSec: Long): Observable[T] = {
-      obs.takeUntil(Observable(
-        Future {
-          Await.ready(Promise().future, totalSec seconds)
-          Unit
-        }))
+      obs.takeUntil(Observable.interval(totalSec seconds))
     }
 
 
@@ -100,6 +96,7 @@ trait WikipediaApi {
      */
     def concatRecovered[S](requestMethod: T => Observable[S]): Observable[Try[S]] = {
       obs.map(requestMethod(_)).concat.recovered
+//      obs.map(requestMethod).flatten.recovered
     }
 
   }

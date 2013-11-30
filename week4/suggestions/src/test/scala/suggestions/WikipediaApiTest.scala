@@ -13,6 +13,7 @@ import gui._
 
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
+import scala.collection.mutable
 
 
 @RunWith(classOf[JUnitRunner])
@@ -66,5 +67,21 @@ class WikipediaApiTest extends FunSuite {
       s => total = s
     }
     assert(total == (1 + 1 + 2 + 1 + 2 + 3), s"Sum: $total")
+  }
+
+  test("timedOut") {
+    val ticks = Observable.interval(100 millis)
+
+    val done = Promise[Unit]()
+    val observed = mutable.Buffer[Long]()
+    ticks.timedOut(1).subscribe(
+      next => observed += next,
+      error => Unit,
+      () => done.success()
+    )
+
+    Await.ready(done.future, 2 seconds)
+
+    assert(observed == Seq(0,1,2,3,4,5,6,7,8,9), observed)
   }
 }

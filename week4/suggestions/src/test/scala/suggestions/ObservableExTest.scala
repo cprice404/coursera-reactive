@@ -7,7 +7,6 @@ import scala.concurrent.{Await, Future}
 import rx.lang.scala.Observable
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
-//import rx.lang.scala.subscriptions.Subscription
 import suggestions.observablex.ObservableEx
 
 import scala.language.postfixOps
