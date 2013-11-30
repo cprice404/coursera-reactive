@@ -84,4 +84,51 @@ class WikipediaApiTest extends FunSuite {
 
     assert(observed == Seq(0,1,2,3,4,5,6,7,8,9), observed)
   }
+
+  class Observed[T]() {
+    val observed:mutable.Buffer[T] = mutable.Buffer[T]()
+    var isComplete:Boolean = false
+  }
+
+  def testSubscribeRecovered[T](o:Observable[Try[T]]) : Observed[Try[T]] = {
+    val observed = new Observed[Try[T]]()
+    o subscribe(
+      next => observed.observed += next,
+      error => { throw new IllegalStateException("recovered stream should not have errors!") },
+      () => observed.isComplete = true
+    )
+    observed
+  }
+
+  test("recovered") {
+    val err = new IllegalStateException("doh")
+    val obsWithErrors = Observable(1, 2, 3) ++ Observable(err)
+    val observed = testSubscribeRecovered(obsWithErrors.recovered)
+    assert(observed.observed == Seq(Success(1), Success(2),
+      Success(3), Failure(err)),
+      observed.observed)
+    assert(observed.isComplete, "Observable did not complete!")
+  }
+
+  test("concatRecovered with error") {
+    val err = new Exception
+    val cat:Observable[Try[Int]] = Observable(1,2,3,4,5).concatRecovered((num:Int) =>
+      if (num != 4) Observable(num) else Observable(err))
+    val observed = testSubscribeRecovered(cat)
+    assert(observed.observed == Seq(Success(1), Success(2), Success(3),
+      Failure(err), Success(5)), observed.observed)
+    assert(observed.isComplete, "Observable did not complete")
+  }
+
+  test("concatRecovered without error") {
+    val cat:Observable[Try[Int]] = Observable(1,2,3).concatRecovered((num:Int) => Observable[Int](num, num, num))
+    val observed = testSubscribeRecovered(cat)
+    assert(observed.observed ==
+      Seq(Success(1), Success(1), Success(1),
+        Success(2), Success(2), Success(2),
+        Success(3), Success(3), Success(3)),
+      observed.observed)
+    assert(observed.isComplete, "Observable did not complete")
+  }
+
 }

@@ -51,8 +51,11 @@ trait WikipediaApi {
     def recovered: Observable[Try[T]] = {
       Observable(o => {
         obs.subscribe(
-          next => o onNext(Success(next)),
-          error => o onNext(Failure(error)),
+          next => o onNext Success(next),
+          error => {
+            o onNext Failure(error)
+            o onCompleted()
+          },
           () => o onCompleted()
         )
       })
@@ -95,11 +98,8 @@ trait WikipediaApi {
      * Observable(Success(1), Succeess(1), Succeess(1), Succeess(2), Succeess(2), Succeess(2), Succeess(3), Succeess(3), Succeess(3))
      */
     def concatRecovered[S](requestMethod: T => Observable[S]): Observable[Try[S]] = {
-      obs.map(requestMethod(_)).concat.recovered
-//      obs.map(requestMethod).flatten.recovered
+        obs.map(requestMethod(_).recovered).concat
     }
-
   }
-
 }
 
