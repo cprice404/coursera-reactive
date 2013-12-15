@@ -95,8 +95,6 @@ object BinaryTreeNode {
 }
 
 class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor {
-  println(s"Constructing BTN: '$elem', '$initiallyRemoved'")
-
   import BinaryTreeNode._
   import BinaryTreeSet._
 
@@ -106,14 +104,17 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor {
   // optional
   def receive = normal
 
-  def subtreeContains(p:Position, c:Contains) = {
-    subtrees.get(p) match {
+  def subtreePosition(x:Int) : Position = if (x < elem) Left else Right
+
+  def subtreeContains(c:Contains) = {
+    subtrees.get(subtreePosition(c.elem)) match {
       case Some(node) => node ! c
       case None => c.requester ! ContainsResult(c.id, result = false)
     }
   }
 
-  def subtreeInsert(p:Position, i:Insert) = {
+  def subtreeInsert(i:Insert) = {
+    val p = subtreePosition(i.elem)
     subtrees.get(p) match {
       case Some(node) => node ! i
       case None => {
@@ -129,11 +130,9 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor {
   val normal: Receive = {
     case c @ Contains(requester, id, x) =>
       if (x == elem) requester ! ContainsResult(id, ! removed)
-      else if (x < elem) subtreeContains(Left, c)
-      else subtreeContains(Right, c)
+      else subtreeContains(c)
     case i @ Insert(requester, id, x) =>
-      if (x < elem) subtreeInsert(Left, i)
-      else if (x > elem) subtreeInsert(Right, i)
+      if (x != elem) subtreeInsert(i)
       else {
         removed = false
         requester ! OperationFinished(id)
