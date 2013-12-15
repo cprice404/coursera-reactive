@@ -66,7 +66,12 @@ class BinaryTreeSet extends Actor {
 
   // optional
   /** Accepts `Operation` and `GC` messages. */
-  val normal: Receive = { case _ => ??? }
+  val normal: Receive = {
+    case o:Operation =>
+      root ! o
+    case GC =>
+      ???
+  }
 
   // optional
   /** Handles messages while garbage collection is performed.
@@ -90,6 +95,8 @@ object BinaryTreeNode {
 }
 
 class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor {
+  println(s"Constructing BTN: '$elem', '$initiallyRemoved'")
+
   import BinaryTreeNode._
   import BinaryTreeSet._
 
@@ -99,9 +106,43 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor {
   // optional
   def receive = normal
 
+  def subtreeContains(p:Position, c:Contains) = {
+    subtrees.get(p) match {
+      case Some(node) => node ! c
+      case None => c.requester ! ContainsResult(c.id, result = false)
+    }
+  }
+
+  def subtreeInsert(p:Position, i:Insert) = {
+    subtrees.get(p) match {
+      case Some(node) => node ! i
+      case None => {
+        subtrees = subtrees +
+          (p -> context.actorOf(BinaryTreeNode.props(i.elem, initiallyRemoved = false)))
+        i.requester ! OperationFinished(i.id)
+      }
+    }
+  }
+
   // optional
   /** Handles `Operation` messages and `CopyTo` requests. */
-  val normal: Receive = { case _ => ??? }
+  val normal: Receive = {
+    case c @ Contains(requester, id, x) =>
+      if (x == elem) requester ! ContainsResult(id, ! removed)
+      else if (x < elem) subtreeContains(Left, c)
+      else subtreeContains(Right, c)
+    case i @ Insert(requester, id, x) =>
+      if (x < elem) subtreeInsert(Left, i)
+      else if (x > elem) subtreeInsert(Right, i)
+      else {
+        removed = false
+        requester ! OperationFinished(id)
+      }
+    case Remove(requester, id, x) =>
+      ???
+    case CopyTo(node) =>
+      ???
+  }
 
   // optional
   /** `expected` is the set of ActorRefs whose replies we are waiting for,
