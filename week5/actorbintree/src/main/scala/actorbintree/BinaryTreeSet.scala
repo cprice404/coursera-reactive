@@ -125,6 +125,13 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor {
     }
   }
 
+  def subtreeRemove(r:Remove) = {
+    subtrees.get(subtreePosition(r.elem)) match {
+      case Some(node) => node ! r
+      case None => r.requester ! OperationFinished(r.id)
+    }
+  }
+
   // optional
   /** Handles `Operation` messages and `CopyTo` requests. */
   val normal: Receive = {
@@ -137,8 +144,12 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor {
         removed = false
         requester ! OperationFinished(id)
       }
-    case Remove(requester, id, x) =>
-      ???
+    case r @ Remove(requester, id, x) =>
+      if (x != elem) subtreeRemove(r)
+      else {
+        removed = true
+        requester ! OperationFinished(id)
+      }
     case CopyTo(node) =>
       ???
   }
