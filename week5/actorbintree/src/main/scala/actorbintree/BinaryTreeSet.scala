@@ -180,7 +180,8 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor {
     if (! isFinished) copyWaiting(expected, insertConfirmed)
     else {
       context.parent ! CopyFinished
-      normal
+      context.stop(self)
+      Actor.emptyBehavior
     }
   }
 
