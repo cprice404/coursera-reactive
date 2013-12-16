@@ -10,6 +10,7 @@ import org.scalatest.matchers.ShouldMatchers
 import scala.util.Random
 import scala.concurrent.duration._
 import org.scalatest.FunSuite
+import scala.collection.mutable.ListBuffer
 
 
 class BinaryTreeSuite(_system: ActorSystem) extends TestKit(_system) with FunSuite with ShouldMatchers with BeforeAndAfterAll with ImplicitSender 
@@ -82,7 +83,47 @@ class BinaryTreeSuite(_system: ActorSystem) extends TestKit(_system) with FunSui
 
     verify(requester, ops, expectedReplies)
   }
-  
+
+  test("respond to GC") {
+    val set = system.actorOf(Props[BinaryTreeSet])
+
+    set ! GC
+
+    set ! Contains(testActor, id = 1, 1)
+    expectMsg(ContainsResult(1, false))
+
+    set ! Insert(testActor, id = 2, 1)
+    set ! Contains(testActor, id = 3, 1)
+    expectMsg(OperationFinished(2))
+    expectMsg(ContainsResult(3, true))
+  }
+
+  test("more gc") {
+    val requester = TestProbe()
+    val requesterRef = requester.ref
+
+    val set = system.actorOf(Props[BinaryTreeSet])
+    val ops = ListBuffer[Operation]()
+
+    def sendOp(o:Operation) : Unit = {
+      set ! o
+      ops += o
+    }
+
+    sendOp(Insert(requesterRef, 0, 81))
+    sendOp(Insert(requesterRef, 1, 33))
+    set ! GC
+    sendOp(Remove(requesterRef, 2, 78))
+    set ! GC
+
+    val expected = List(
+      OperationFinished(0),
+      OperationFinished(1),
+      OperationFinished(2)
+    )
+    receiveN(requester, ops, expected)
+  }
+
   test("behave identically to built-in set (includes GC)") {
     val rnd = new Random()
     def randomOperations(requester: ActorRef, count: Int): Seq[Operation] = {
