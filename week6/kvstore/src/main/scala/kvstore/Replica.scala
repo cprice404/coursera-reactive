@@ -53,6 +53,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     case JoinedSecondary => context.become(replica)
   }
 
+
   /* TODO Behavior for  the leader role. */
   val leader: Receive = {
     case Get(k, id) =>
@@ -65,9 +66,25 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
       context.sender ! OperationAck(id)
   }
 
+
+  var nextSeqId: Long = 0
+
   /* TODO Behavior for the replica role. */
   val replica: Receive = {
-    case _ => ???
+    case Get(k, id) =>
+      context.sender ! GetResult(k, kv.get(k), id)
+    case Snapshot(k, v, id) =>
+      if (id < nextSeqId) context.sender ! SnapshotAck(k, id)
+      else if (id == nextSeqId) {
+        v match {
+          case Some(value) =>
+            kv = kv.updated(k, value)
+          case None =>
+            kv = kv - k
+        }
+        nextSeqId += 1
+        context.sender ! SnapshotAck(k, id)
+      }
   }
 
 }
