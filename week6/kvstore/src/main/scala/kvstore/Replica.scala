@@ -54,10 +54,14 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
 
 
   val persistence = context.actorOf(persistenceProps)
-  var pendingPersistenceAcks = Map.empty[Long, PendingAck]
-  var pendingReplicationAcks = Map.empty[Long, (Set[ActorRef], PendingAck)]
   val MAX_PRIMARY_PERSISTENCE_RETRIES = 10
   val MAX_REPLICATION_RETRIES = 10
+
+  var pendingPersistenceAcks = Map.empty[Long, PendingAck]
+  var pendingReplicationAcks = Map.empty[Long, (Set[ActorRef], PendingAck)]
+  var replicatorNextId = Map.empty[ActorRef, Long]
+  var replicatorIdToAckId = Map.empty[(ActorRef, Long), Long]
+  var ackIdToReplicatorId = Map.empty[(ActorRef, Long), Long]
 
   arbiter ! Join
 
@@ -93,13 +97,17 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     case ResendReplicates =>
       pendingReplicationAcks = pendingReplicationAcks.filter(sendReplicationFailure)
       pendingReplicationAcks = pendingReplicationAcks.map(resendReplicate)
-    case Replicated(k, id) =>
-      val (rs, pa @ PendingAck(a, _, _, _)) = pendingReplicationAcks(id)
+    case Replicated(k, repId) =>
+      val r:ActorRef = context.sender
+      val ackId = replicatorIdToAckId(r, repId)
+      val (rs, pa @ PendingAck(a, _, _, _)) = pendingReplicationAcks(ackId)
       val remaining = rs - context.sender
-      if (! remaining.isEmpty) pendingReplicationAcks = pendingReplicationAcks.updated(id, (remaining, pa))
+      replicatorIdToAckId = replicatorIdToAckId - ((r, repId))
+      ackIdToReplicatorId = ackIdToReplicatorId - ((r, ackId))
+      if (! remaining.isEmpty) pendingReplicationAcks = pendingReplicationAcks.updated(ackId, (remaining, pa))
       else {
-        pendingReplicationAcks = pendingReplicationAcks - id
-        if (! pendingPersistenceAcks.contains(id)) a ! OperationAck(id)
+        pendingReplicationAcks = pendingReplicationAcks - ackId
+        if (! pendingPersistenceAcks.contains(ackId)) a ! OperationAck(ackId)
       }
   }
 
@@ -178,11 +186,17 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
   }
 
   def replicate(k:String, v:Option[String], id:Long) = {
+    replicators.foreach(replicator => {
+      val repId:Long = replicatorNextId.getOrElse(replicator, 0)
+      replicatorNextId = replicatorNextId.updated(replicator, repId + 1)
+      replicatorIdToAckId = replicatorIdToAckId.updated((replicator, repId), id)
+      ackIdToReplicatorId = ackIdToReplicatorId.updated((replicator, id), repId)
+      val r = Replicate(k, v, repId)
+      replicator ! r
+    })
     if (! replicators.isEmpty) {
-      val r = Replicate(k, v, id)
       pendingReplicationAcks = pendingReplicationAcks.updated(id,
         (replicators, PendingAck(context.sender, k, v, 0)))
-      replicators.foreach(replicator => replicator ! r)
       scheduleResendReplicates()
     }
   }
@@ -193,7 +207,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
 
   def resendReplicate(entry: (Long, (Set[ActorRef], PendingAck))) : (Long, (Set[ActorRef], PendingAck)) = {
     val (id, (rs, PendingAck(a, k, v, numRetries))) = entry
-    rs.foreach(r => r ! Replicate(k, v, id))
+    rs.foreach(r => r ! Replicate(k, v, ackIdToReplicatorId((r, id))))
     scheduleResendReplicates()
     (id, (rs, PendingAck(a, k, v, numRetries + 1)))
   }
