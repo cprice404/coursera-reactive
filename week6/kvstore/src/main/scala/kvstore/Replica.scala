@@ -13,6 +13,7 @@ import akka.actor.OneForOneStrategy
 import akka.actor.SupervisorStrategy
 import akka.util.Timeout
 import scala.language.postfixOps
+import kvstore.Persistence.Persist
 
 object Replica {
   sealed trait Operation {
@@ -29,6 +30,8 @@ object Replica {
   case class GetResult(key: String, valueOption: Option[String], id: Long) extends OperationReply
 
   case object ResendPersists
+  case object ResendReplicates
+  case class PendingAck(a:ActorRef, k:String, v:Option[String], numRetries:Int)
 
   def props(arbiter: ActorRef, persistenceProps: Props): Props = Props(new Replica(arbiter, persistenceProps))
 }
@@ -51,7 +54,10 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
 
 
   val persistence = context.actorOf(persistenceProps)
-  var pendingPersistenceAcks = Map.empty[Long, (Persist, ActorRef)]
+  var pendingPersistenceAcks = Map.empty[Long, PendingAck]
+  var pendingReplicationAcks = Map.empty[Long, (Set[ActorRef], PendingAck)]
+  val MAX_PRIMARY_PERSISTENCE_RETRIES = 10
+  val MAX_REPLICATION_RETRIES = 10
 
   arbiter ! Join
 
@@ -67,12 +73,34 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
       context.sender ! GetResult(k, kv.get(k), id)
     case Insert(k, v, id) =>
       kv = kv.updated(k, v)
-      context.sender ! OperationAck(id)
+      persist(k, Option(v), id)
+      replicate(k, Option(v), id)
     case Remove(k, id) =>
       kv = kv - k
-      context.sender ! OperationAck(id)
+      persist(k, None, id)
+      replicate(k, None, id)
+    case Persisted(k, id) =>
+      val PendingAck(a, _, _, _) = pendingPersistenceAcks(id)
+      if (! pendingReplicationAcks.contains(id)) a ! OperationAck(id)
+      pendingPersistenceAcks = pendingPersistenceAcks - id
+    case ResendPersists =>
+      pendingPersistenceAcks = pendingPersistenceAcks.filter(sendPersistenceFailure)
+      pendingPersistenceAcks = pendingPersistenceAcks.map(resendPersist)
+    case Replicas(rs) =>
+      removeOldReplicas(rs)
+      addNewReplicas(rs)
+    case ResendReplicates =>
+      pendingReplicationAcks = pendingReplicationAcks.filter(sendReplicationFailure)
+      pendingReplicationAcks = pendingReplicationAcks.map(resendReplicate)
+    case Replicated(k, id) =>
+      val (rs, pa @ PendingAck(a, _, _, _)) = pendingReplicationAcks(id)
+      val remaining = rs - context.sender
+      if (! remaining.isEmpty) pendingReplicationAcks = pendingReplicationAcks.updated(id, (remaining, pa))
+      else {
+        pendingReplicationAcks = pendingReplicationAcks - id
+        if (! pendingPersistenceAcks.contains(id)) a ! OperationAck(id)
+      }
   }
-
 
   var nextSeqId: Long = 0
 
@@ -90,29 +118,92 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
             kv = kv - k
         }
         nextSeqId += 1
-        val p = Persist(k, v, id)
-        pendingPersistenceAcks = pendingPersistenceAcks.updated(id, (p, context.sender))
-        persistence ! p
-        scheduleResend()
+        persist(k,v,id)
       }
     case Persisted(k, id) =>
-      val (_, a) = pendingPersistenceAcks(id)
+      val PendingAck(a, _, _, _) = pendingPersistenceAcks(id)
       a ! SnapshotAck(k, id)
       pendingPersistenceAcks = pendingPersistenceAcks - id
     case ResendPersists =>
-      pendingPersistenceAcks.values.foreach(resendPersist)
+      pendingPersistenceAcks.foreach(resendPersist)
   }
 
-  def scheduleResend() = {
+
+  def persist(k:String, v:Option[String], id:Long) = {
+    val p = Persist(k, v, id)
+    pendingPersistenceAcks = pendingPersistenceAcks.updated(id, PendingAck(context.sender, k, v, 0))
+    persistence ! p
+    scheduleResendPersists()
+  }
+
+  def scheduleResendPersists() = {
     context.system.scheduler.scheduleOnce(100 millis, self, ResendPersists)
   }
 
-  def resendPersist(pa: (Persist, ActorRef)) : Unit = {
-    val (p, _) = pa
-    persistence ! p
-    scheduleResend()
+  def resendPersist(entry: (Long, PendingAck)) : (Long, PendingAck) = {
+    val (id, PendingAck(a, k, v, numRetries)) = entry
+    persistence ! Persist(k, v, id)
+    scheduleResendPersists()
+    (id, PendingAck(a, k, v, numRetries + 1))
   }
 
+  def sendPersistenceFailure(entry: (Long, PendingAck)) : Boolean = {
+    val (id, PendingAck(a, _, _, numRetries)) = entry
+    if (numRetries < MAX_PRIMARY_PERSISTENCE_RETRIES) true
+    else {
+      a ! OperationFailed(id)
+      false
+    }
+  }
 
+  def removeOldReplicas(rs: Set[ActorRef]) : Unit = {
+    val extras = secondaries.keys.filterNot(replica => rs.contains(replica))
+    extras.foreach(replica => {
+      val replicator = secondaries(replica)
+      context.stop(replica)
+      context.stop(replicator)
+      secondaries = secondaries - replica
+      replicators = replicators - replicator
+    })
+  }
+
+  def addNewReplicas(rs: Set[ActorRef]) : Unit = {
+    val news = rs -- secondaries.keySet
+    news.foreach(replica => {
+      val replicator = context.actorOf(Replicator.props(replica))
+      secondaries = secondaries.updated(replica, replicator)
+      replicators = replicators + replicator
+    })
+  }
+
+  def replicate(k:String, v:Option[String], id:Long) = {
+    if (! replicators.isEmpty) {
+      val r = Replicate(k, v, id)
+      pendingReplicationAcks = pendingReplicationAcks.updated(id,
+        (replicators, PendingAck(context.sender, k, v, 0)))
+      replicators.foreach(replicator => replicator ! r)
+      scheduleResendReplicates()
+    }
+  }
+
+  def scheduleResendReplicates() = {
+    context.system.scheduler.scheduleOnce(100 millis, self, ResendReplicates)
+  }
+
+  def resendReplicate(entry: (Long, (Set[ActorRef], PendingAck))) : (Long, (Set[ActorRef], PendingAck)) = {
+    val (id, (rs, PendingAck(a, k, v, numRetries))) = entry
+    rs.foreach(r => r ! Replicate(k, v, id))
+    scheduleResendReplicates()
+    (id, (rs, PendingAck(a, k, v, numRetries + 1)))
+  }
+
+  def sendReplicationFailure(entry: (Long, (Set[ActorRef], PendingAck))) : Boolean = {
+    val (id, (rs, PendingAck(a, _, _, numRetries))) = entry
+    if (numRetries < MAX_REPLICATION_RETRIES) true
+    else {
+      a ! OperationFailed(id)
+      false
+    }
+  }
 
 }

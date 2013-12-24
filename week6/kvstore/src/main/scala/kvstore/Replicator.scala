@@ -60,6 +60,8 @@ class Replicator(val replica: ActorRef) extends Actor {
         scheduleResend()
       }
     case SnapshotAck(k, id) =>
+      val (a, Replicate(_, _, _)) = acks(id)
+      a ! Replicated(k, id)
       acks = acks - id
   }
 
