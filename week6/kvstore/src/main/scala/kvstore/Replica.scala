@@ -87,8 +87,9 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
       pendingPersistenceAcks = pendingPersistenceAcks.filter(sendPersistenceFailure)
       pendingPersistenceAcks = pendingPersistenceAcks.map(resendPersist)
     case Replicas(rs) =>
-      removeOldReplicas(rs)
-      addNewReplicas(rs)
+      val secs = rs - context.self
+      removeOldReplicas(secs)
+      addNewReplicas(secs)
     case ResendReplicates =>
       pendingReplicationAcks = pendingReplicationAcks.filter(sendReplicationFailure)
       pendingReplicationAcks = pendingReplicationAcks.map(resendReplicate)
