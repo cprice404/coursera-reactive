@@ -12,6 +12,7 @@ import akka.actor.PoisonPill
 import akka.actor.OneForOneStrategy
 import akka.actor.SupervisorStrategy
 import akka.util.Timeout
+import scala.language.postfixOps
 
 object Replica {
   sealed trait Operation {
@@ -26,6 +27,8 @@ object Replica {
   case class OperationAck(id: Long) extends OperationReply
   case class OperationFailed(id: Long) extends OperationReply
   case class GetResult(key: String, valueOption: Option[String], id: Long) extends OperationReply
+
+  case object ResendPersists
 
   def props(arbiter: ActorRef, persistenceProps: Props): Props = Props(new Replica(arbiter, persistenceProps))
 }
@@ -45,6 +48,10 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
   var secondaries = Map.empty[ActorRef, ActorRef]
   // the current set of replicators
   var replicators = Set.empty[ActorRef]
+
+
+  val persistence = context.actorOf(persistenceProps)
+  var pendingPersistenceAcks = Map.empty[Long, (Persist, ActorRef)]
 
   arbiter ! Join
 
@@ -83,8 +90,29 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
             kv = kv - k
         }
         nextSeqId += 1
-        context.sender ! SnapshotAck(k, id)
+        val p = Persist(k, v, id)
+        pendingPersistenceAcks = pendingPersistenceAcks.updated(id, (p, context.sender))
+        persistence ! p
+        scheduleResend()
       }
+    case Persisted(k, id) =>
+      val (_, a) = pendingPersistenceAcks(id)
+      a ! SnapshotAck(k, id)
+      pendingPersistenceAcks = pendingPersistenceAcks - id
+    case ResendPersists =>
+      pendingPersistenceAcks.values.foreach(resendPersist)
   }
+
+  def scheduleResend() = {
+    context.system.scheduler.scheduleOnce(100 millis, self, ResendPersists)
+  }
+
+  def resendPersist(pa: (Persist, ActorRef)) : Unit = {
+    val (p, _) = pa
+    persistence ! p
+    scheduleResend()
+  }
+
+
 
 }
