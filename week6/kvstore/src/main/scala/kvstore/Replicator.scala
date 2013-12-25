@@ -53,16 +53,16 @@ class Replicator(val replica: ActorRef) extends Actor {
     case r @ Replicate(k, v, id) =>
       acks = acks.updated(id, (context.sender, r))
       scheduleResend()
-      replica ! Snapshot(k, v, id)
+      replica ! Snapshot(k, v, nextSeq)
     case ResendSnapshots =>
       if (! acks.isEmpty) {
         acks.values.foreach(resendSnapshot)
         scheduleResend()
       }
-    case SnapshotAck(k, id) =>
-      val (a, Replicate(_, _, _)) = acks(id)
-      a ! Replicated(k, id)
-      acks = acks - id
+    case SnapshotAck(k, snapshotId) =>
+      val (a, Replicate(_, _, origId)) = acks(snapshotId)
+      a ! Replicated(k, origId)
+      acks = acks - snapshotId
   }
 
 }
