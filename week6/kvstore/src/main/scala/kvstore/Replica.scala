@@ -88,11 +88,11 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     case Insert(k, v, id) =>
       kv = kv.updated(k, v)
       persist(k, Option(v), id)
-      replicate(k, Option(v), id)
+      replicate(replicators, k, Option(v), MessageId(context.sender, id))
     case Remove(k, id) =>
       kv = kv - k
       persist(k, None, id)
-      replicate(k, None, id)
+      replicate(replicators, k, None, MessageId(context.sender, id))
     case Persisted(k, persistId) =>
       val PendingAck(mid @ MessageId(a, origId), _, _, _) = pendingPersistenceAcks(persistId)
       if (! ackIdToReplicatorId.contains(mid)) a ! OperationAck(origId)
@@ -214,10 +214,8 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     })
   }
 
-  def replicate(k:String, v:Option[String], origId:Long) = {
-    replicators.foreach(replicator => {
-      val mid:MessageId = MessageId(context.sender, origId)
-
+  def replicate(rs:Set[ActorRef], k:String, v:Option[String], mid:MessageId) = {
+    rs.foreach(replicator => {
       val repId:Long = replicatorNextId.getOrElse(replicator, 0)
       replicatorNextId = replicatorNextId.updated(replicator, repId + 1)
 
@@ -231,7 +229,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
       val r = Replicate(k, v, repId)
       replicator ! r
     })
-    if (! replicators.isEmpty) scheduleResendReplicates()
+    if (! rs.isEmpty) scheduleResendReplicates()
   }
 
   def scheduleResendReplicates() = {
