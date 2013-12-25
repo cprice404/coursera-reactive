@@ -202,16 +202,29 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
       context.stop(replicator)
       secondaries = secondaries - replica
       replicators = replicators - replicator
+      if (pendingReplicationAcks.contains(replicator)) {
+        val pas = pendingReplicationAcks(replicator)
+        pendingReplicationAcks = pendingReplicationAcks - replicator
+        pas.values.foreach((pa:PendingAck) => {
+          val PendingAck(mid, _, _, _) = pa
+          sendOperationAckIfReady(mid)
+        })
+      }
     })
   }
 
   def addNewReplicas(rs: Set[ActorRef]) : Unit = {
-    val news = rs -- secondaries.keySet
-    news.foreach(replica => {
+    val newReplicas = rs -- secondaries.keySet
+    val newReplicators = newReplicas.map(replica => {
       val replicator = context.actorOf(Replicator.props(replica))
       secondaries = secondaries.updated(replica, replicator)
-      replicators = replicators + replicator
+      replicator
     })
+    kv.foreach(e => {
+      val (k, v) = e
+      replicate(newReplicators, k, Some(v), None)
+    })
+    replicators = replicators ++ newReplicators
   }
 
   def replicate(rs:Set[ActorRef], k:String, v:Option[String], messageId:Option[MessageId]) = {
