@@ -97,7 +97,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
       val PendingAck(mid @ MessageId(a, origId), _, _, _) = pendingPersistenceAcks(persistId)
       if (! ackIdToReplicatorId.contains(mid)) a ! OperationAck(origId)
       pendingPersistenceAcks = pendingPersistenceAcks - persistId
-      ackIdToPersistId = ackIdToPersistId - mid
+//      ackIdToPersistId = ackIdToPersistId - mid
       nextPersistId += 1
     case ResendPersists =>
       pendingPersistenceAcks = pendingPersistenceAcks.filter(sendPersistenceFailure)
@@ -107,11 +107,13 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
       removeOldReplicas(secs)
       addNewReplicas(secs)
     case ResendReplicates =>
+      println("RESENDING REPLICATES")
       val tooManyRetries: Set[MessageId] = messageIdSet(
         filterByAck(pendingReplicationAcks)((pa:PendingAck) => {
           val PendingAck(_, _, _, numRetries) = pa
           numRetries >= MAX_REPLICATION_RETRIES
         }))
+      println(s"TOO MANY RETRIES: $tooManyRetries")
 //      {
 //        for {
 //          acksMapEntry <- filterByAck(pendingReplicationAcks)((pa:PendingAck) => {
@@ -132,7 +134,12 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
 //        pendingReplicationAcks.
 //        foldLeft(ReplAckMap())(filterPendingReplByMessageId(tooManyRetries))
 //      pendingReplicationAcks = pendingReplicationAcks.flatMap(sendFailuresForReplicator)
-      pendingReplicationAcks.foreach(resendReplicatesForReplicator)
+//      pendingReplicationAcks.foreach(resendReplicatesForReplicator)
+      pendingReplicationAcks = walkReplAcks(pendingReplicationAcks)((pa:PendingAck) => {
+        val PendingAck(mid, k, v, numRetries) = pa
+        PendingAck(mid, k, v, numRetries + 1)
+      })
+      if (! pendingReplicationAcks.isEmpty) scheduleResendReplicates()
     case Replicated(k, repId) =>
       val r:ActorRef = context.sender
 //      val ackId = replicatorIdToAckId(r, repId)
@@ -150,13 +157,15 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
       if (remainingPas.isEmpty) pendingReplicationAcks = pendingReplicationAcks - r
       else pendingReplicationAcks = pendingReplicationAcks.updated(r, remainingPas)
 
-      val PendingAck(mid @ MessageId(a, origId), _, _, _) = pas(repId)
-      val replsForMsg = ackIdToReplicatorId(mid) - r
-      if (! replsForMsg.isEmpty) ackIdToReplicatorId = ackIdToReplicatorId.updated(mid, replsForMsg)
-      else {
-        ackIdToReplicatorId = ackIdToReplicatorId - mid
-        if (! pendingPersistenceAcks.contains(ackIdToPersistId(mid))) a ! OperationAck(origId)
-      }
+
+      val PendingAck(mid, _, _, _) = pas(repId)
+//      val replsForMsg = ackIdToReplicatorId(mid) - r
+//      if (! replsForMsg.isEmpty) ackIdToReplicatorId = ackIdToReplicatorId.updated(mid, replsForMsg)
+//      else {
+//        ackIdToReplicatorId = ackIdToReplicatorId - mid
+//        if (! pendingPersistenceAcks.contains(ackIdToPersistId(mid))) a ! OperationAck(origId)
+//      }
+      sendOperationAckIfReady(mid)
 
   }
 
@@ -182,7 +191,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
       val PendingAck(mid @ MessageId(a, origId), _, _, _) = pendingPersistenceAcks(persistId)
       a ! SnapshotAck(k, origId)
       pendingPersistenceAcks = pendingPersistenceAcks - persistId
-      ackIdToPersistId = ackIdToPersistId - mid
+//      ackIdToPersistId = ackIdToPersistId - mid
     case ResendPersists =>
       pendingPersistenceAcks.foreach(resendPersist)
   }
@@ -314,6 +323,17 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
     })
   }
 
+  def walkReplAcks(ackMap:ReplAckMap)(f: (PendingAck) => PendingAck) : ReplAckMap = {
+    ackMap.foldLeft(ReplAckMap())((acc:ReplAckMap, entry:ReplAckEntry) => {
+      val (replicator, acks) = entry
+      val transformedAcks = acks.map((ackEntry:(Long, PendingAck)) => {
+        val (repId, pa) = ackEntry
+        (repId, f(pa))
+      })
+      acc.updated(replicator, transformedAcks)
+    })
+  }
+
   def resendReplicatesForReplicator(entry: ReplAckEntry) : Unit = {
     val (r, pendingAcksMap) = entry
     pendingAcksMap.foreach((e: (Long, PendingAck)) => {
@@ -331,5 +351,33 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
 //    if (filteredAcks.isEmpty) acc
 //    else acc.updated(replicator, filteredAcks)
 //  }
+
+  def sendOperationAckIfReady(mid: MessageId) : Unit = {
+    val replsForMsg: Map[ActorRef, Long] = ackIdToReplicatorId(mid)
+    val persistId: Long = ackIdToPersistId(mid)
+
+    if (! pendingPersistenceAcks.contains(persistId)) {
+      val repls = replsForMsg.foldLeft(List[ActorRef]())((acc, e) => {
+        val (r, replId) = e
+        if (pendingReplicationAcks.contains(r) && pendingReplicationAcks(r).contains(replId)) r :: acc
+        else acc
+      })
+      if (repls.isEmpty) {
+        val MessageId(a, origId) = mid
+        a ! OperationAck(origId)
+        ackIdToReplicatorId = ackIdToReplicatorId - mid
+        ackIdToPersistId = ackIdToPersistId - mid
+      }
+    }
+
+//          if (! replsForMsg.isEmpty) ackIdToReplicatorId = ackIdToReplicatorId.updated(mid, replsForMsg)
+//          else {
+//            ackIdToReplicatorId = ackIdToReplicatorId - mid
+//            if (! pendingPersistenceAcks.contains(ackIdToPersistId(mid))) a ! OperationAck(origId)
+//          }
+//
+//    xxx
+
+  }
 
 }
